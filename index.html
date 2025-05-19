@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Reaction Time Game</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background-color: black;
+      color: white;
+    }
+
+    #enter-screen {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      width: 100%;
+      background-color: black;
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 2;
+    }
+
+    #enter-screen h1 {
+      font-size: 2.5em;
+      margin-bottom: 20px;
+    }
+
+    #name-input {
+      padding: 10px;
+      font-size: 1.2em;
+      margin-bottom: 20px;
+      border-radius: 6px;
+      border: none;
+    }
+
+    #enter-button {
+      padding: 15px 40px;
+      font-size: 1.5em;
+      background-color: black;
+      color: white;
+      border: 2px solid white;
+      border-radius: 12px;
+      cursor: pointer;
+      box-shadow: 0 5px 15px rgba(255, 255, 255, 0.3);
+      transition: all 0.1s ease-in-out;
+    }
+
+    #enter-button:active {
+      transform: scale(0.95);
+      box-shadow: 0 2px 5px rgba(255, 255, 255, 0.2);
+    }
+
+    #game-container {
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      width: 100%;
+      text-align: center;
+    }
+
+    #message {
+      font-size: 2.5em;
+      margin-bottom: 20px;
+    }
+
+    #reaction-time {
+      font-size: 2em;
+    }
+
+    #status {
+      font-size: 1.2em;
+      margin-top: 10px;
+    }
+
+    #leaderboard {
+      margin-top: 30px;
+      font-size: 1.1em;
+      color: yellow;
+    }
+
+    #leaderboard ol {
+      padding-left: 20px;
+      text-align: left;
+    }
+
+    #reset-button {
+      margin-top: 30px;
+      padding: 10px 25px;
+      font-size: 1.2em;
+      background-color: white;
+      color: black;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      display: none;
+    }
+
+    #reset-button:hover {
+      background-color: lightgray;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Welcome Screen -->
+  <div id="enter-screen">
+    <h1>Welcome to Global Version</h1>
+    <input type="text" id="name-input" placeholder="Enter your name" />
+    <button id="enter-button">Start</button>
+  </div>
+
+  <!-- Game Screen -->
+  <div id="game-container">
+    <h1 id="message">Be Ready</h1>
+    <div id="reaction-time"></div>
+    <div id="status"></div>
+
+    <!-- Leaderboard -->
+    <div id="leaderboard" class="hidden">
+      <ol id="leaderboard-list"></ol>
+    </div>
+
+    <!-- Reset Button inside game-container -->
+    <button id="reset-button">Reset Game</button>
+  </div>
+
+  <!-- Firebase SDK and Game Logic -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getFirestore, collection, addDoc, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDWkwxIX24YBJOhR8b6PciBf8Jx_mBPtsc",
+      authDomain: "reactiongame-22959.firebaseapp.com",
+      projectId: "reactiongame-22959",
+      storageBucket: "reactiongame-22959.appspot.com",
+      messagingSenderId: "801977388482",
+      appId: "1:801977388482:web:7678e67b4b49e00eab9a5b"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    let startTime = 0;
+    let isGreen = false;
+    let listenerActive = false;
+    let playerName = "";
+
+    const body = document.body;
+    const enterScreen = document.getElementById("enter-screen");
+    const gameContainer = document.getElementById("game-container");
+    const messageEl = document.getElementById("message");
+    const reactionTimeEl = document.getElementById("reaction-time");
+    const statusEl = document.getElementById("status");
+    const resetButton = document.getElementById("reset-button");
+    const leaderboard = document.getElementById("leaderboard");
+    const leaderboardList = document.getElementById("leaderboard-list");
+    const nameInput = document.getElementById("name-input");
+
+    document.getElementById("enter-button").addEventListener("click", () => {
+      playerName = nameInput.value.trim();
+      if (playerName === "") {
+        alert("Please enter your name.");
+        return;
+      }
+      enterScreen.style.display = "none";
+      gameContainer.style.display = "flex";
+      startGame();
+    });
+
+    function startGame() {
+      isGreen = false;
+      listenerActive = false;
+      body.style.backgroundColor = "red";
+      messageEl.textContent = "Be Ready";
+      reactionTimeEl.textContent = "";
+      statusEl.textContent = "";
+      resetButton.style.display = "none";
+      leaderboardList.innerHTML = "";
+      leaderboard.classList.add("hidden");
+
+      const delay = Math.floor(Math.random() * 3000) + 2000;
+      setTimeout(() => {
+        body.style.backgroundColor = "green";
+        messageEl.textContent = "Go!";
+        startTime = Date.now();
+        isGreen = true;
+        listenerActive = true;
+      }, delay);
+    }
+
+    async function stopTimer() {
+      if (!listenerActive || !isGreen) return;
+
+      listenerActive = false;
+      isGreen = false;
+
+      const reactionTime = Date.now() - startTime;
+      reactionTimeEl.textContent = `Your reaction time: ${reactionTime} ms`;
+      statusEl.textContent = "Press Reset to try again";
+      body.style.backgroundColor = "red";
+      messageEl.textContent = "Be Ready";
+      resetButton.style.display = "inline-block";
+
+      showLeaderboard(); // show leaderboard immediately
+
+      try {
+        await addDoc(collection(db, "scores"), {
+          name: playerName,
+          time: reactionTime,
+          created: Date.now()
+        });
+      } catch (e) {
+        console.error("Error saving score:", e);
+      }
+    }
+
+    async function showLeaderboard() {
+      leaderboardList.innerHTML = "";
+
+      // Loading message (big and black)
+      const loadingItem = document.createElement("li");
+      loadingItem.textContent = "Loading leaderboard...";
+      loadingItem.style.color = "black";
+      loadingItem.style.fontSize = "1.5em";
+      leaderboardList.appendChild(loadingItem);
+      leaderboard.classList.remove("hidden");
+
+      try {
+        const q = query(collection(db, "scores"), orderBy("time"), limit(5));
+        const snapshot = await getDocs(q);
+
+        leaderboardList.innerHTML = "";
+
+        // Add "Top 5" title only here
+        const header = document.createElement("h2");
+        header.textContent = "Top 5";
+        header.style.marginBottom = "10px";
+        header.style.color = "yellow";
+        leaderboardList.appendChild(header);
+
+        let rank = 1;
+        snapshot.forEach((doc) => {
+          const li = document.createElement("li");
+          const data = doc.data();
+          const name = data.name || "Unknown";
+          li.textContent = `#${rank} - ${name} - ${data.time} ms`;
+          leaderboardList.appendChild(li);
+          rank++;
+        });
+      } catch (e) {
+        console.error("Error loading leaderboard:", e);
+        leaderboardList.innerHTML = "<li style='color:black; font-size:1.5em;'>Error loading leaderboard</li>";
+      }
+    }
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === " " || e.key === "Enter") stopTimer();
+    });
+
+    document.addEventListener("click", () => stopTimer());
+
+    resetButton.addEventListener("click", () => {
+      startGame();
+    });
+  </script>
+</body>
+</html>
